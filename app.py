@@ -542,8 +542,11 @@ if st.session_state.generated_schedule is None:
         data[str(d)] = col_data
     
     df_edit = pd.DataFrame(data)
+    # Fill NaN/None with empty string
+    df_edit = df_edit.fillna("")
     
-    # Column config for dropdown
+    # Column config for dropdown - use TextColumn with options workaround
+    # Options list: empty string first for "blank" display
     shift_options = ["", SHIFT_OFF, SHIFT_PAID, SHIFT_EARLY, SHIFT_DAY, SHIFT_LATE, SHIFT_NIGHT]
     
     column_config = {
@@ -551,8 +554,9 @@ if st.session_state.generated_schedule is None:
     }
     for d in days:
         column_config[str(d)] = st.column_config.SelectboxColumn(
-            label=str(d),
+            str(d),  # Just the number as label
             options=shift_options,
+            default="",
             required=False,
             width="small"
         )
@@ -566,12 +570,15 @@ if st.session_state.generated_schedule is None:
         num_rows="fixed"
     )
     
+    # Fill NaN in result
+    edited_df = edited_df.fillna("")
+    
     # Sync edits back to session state
     for i, staff in enumerate(st.session_state.staff_list):
         new_requests = {}
         for d in days:
             val = edited_df.iloc[i][str(d)]
-            if val and val != "":
+            if val and val != "" and str(val) != "None":
                 new_requests[str(d)] = val
         staff['requests'] = new_requests
 
