@@ -547,13 +547,14 @@ if st.session_state.generated_schedule is None:
     shift_options = ["", SHIFT_OFF, SHIFT_PAID, SHIFT_EARLY, SHIFT_DAY, SHIFT_LATE, SHIFT_NIGHT]
     
     column_config = {
-        "氏名": st.column_config.TextColumn("氏名", disabled=True)
+        "氏名": st.column_config.TextColumn("氏名", disabled=True, width="small")
     }
     for d in days:
         column_config[str(d)] = st.column_config.SelectboxColumn(
-            str(d),
+            label=str(d),
             options=shift_options,
-            required=False
+            required=False,
+            width="small"
         )
     
     edited_df = st.data_editor(
@@ -561,7 +562,8 @@ if st.session_state.generated_schedule is None:
         column_config=column_config,
         hide_index=True,
         use_container_width=True,
-        key="request_editor"
+        key="request_editor",
+        num_rows="fixed"
     )
     
     # Sync edits back to session state
