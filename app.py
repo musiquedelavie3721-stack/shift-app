@@ -525,70 +525,75 @@ with st.sidebar:
 
 # --- Main Area ---
 
-# 1. Request Input Area (Always Visible)
 st.subheader("希望休・シフト入力")
-st.caption("作成前に希望日や固定シフトを入力してください。")
+st.caption("セルをクリックしてシフトを選択してください。入力後「勤務表を作成」で生成します。")
 
-col_input_1, col_input_2 = st.columns([1, 2])
-
-with col_input_1:
-    staff_names = [s['name'] for s in st.session_state.staff_list]
-    selected_staff_name = st.selectbox("スタッフ選択", staff_names)
-    selected_staff = next(s for s in st.session_state.staff_list if s['name'] == selected_staff_name)
-
-    col_req_day, col_req_shift = st.columns(2)
-    req_day = col_req_day.selectbox("日", days)
-    req_shift = col_req_shift.selectbox("シフト", ["(削除)", SHIFT_OFF, SHIFT_PAID, SHIFT_EARLY, SHIFT_DAY, SHIFT_LATE, SHIFT_NIGHT])
+# Build DataFrame for editing (Requests mode)
+if st.session_state.generated_schedule is None:
+    # Show editable request table
+    data = {}
+    data["氏名"] = [s['name'] for s in st.session_state.staff_list]
     
-    if st.button("希望を保存"):
-        if req_shift == "(削除)":
-            if str(req_day) in selected_staff['requests']:
-                del selected_staff['requests'][str(req_day)]
-        else:
-            selected_staff['requests'][str(req_day)] = req_shift
-        
-        # If schedule existed, warn/reset
-        if st.session_state.generated_schedule:
-            st.warning("希望が変更されました。再生成してください。")
-            st.session_state.generated_schedule = None
-            
-        st.rerun()
-
-# 2. Schedule Display (Requests or Generated)
-st.divider()
-st.subheader("勤務表プレビュー")
-
-# Build DataFrame
-data = []
-headers = [str(d) for d in days]
-
-for staff in st.session_state.staff_list:
-    row = [staff['name']]
     for d in days:
-        val = ""
-        # Priority: Generated Schedule > Requests
-        if st.session_state.generated_schedule:
+        col_data = []
+        for staff in st.session_state.staff_list:
+            val = staff['requests'].get(str(d), "")
+            col_data.append(val if val else "")
+        data[str(d)] = col_data
+    
+    df_edit = pd.DataFrame(data)
+    
+    # Column config for dropdown
+    shift_options = ["", SHIFT_OFF, SHIFT_PAID, SHIFT_EARLY, SHIFT_DAY, SHIFT_LATE, SHIFT_NIGHT]
+    
+    column_config = {
+        "氏名": st.column_config.TextColumn("氏名", disabled=True)
+    }
+    for d in days:
+        column_config[str(d)] = st.column_config.SelectboxColumn(
+            str(d),
+            options=shift_options,
+            required=False
+        )
+    
+    edited_df = st.data_editor(
+        df_edit,
+        column_config=column_config,
+        hide_index=True,
+        use_container_width=True,
+        key="request_editor"
+    )
+    
+    # Sync edits back to session state
+    for i, staff in enumerate(st.session_state.staff_list):
+        new_requests = {}
+        for d in days:
+            val = edited_df.iloc[i][str(d)]
+            if val and val != "":
+                new_requests[str(d)] = val
+        staff['requests'] = new_requests
+
+else:
+    # Generated schedule view (read-only)
+    st.subheader("勤務表（生成済み）")
+    
+    data = []
+    headers = [str(d) for d in days]
+    
+    for staff in st.session_state.staff_list:
+        row = [staff['name']]
+        for d in days:
             val = st.session_state.generated_schedule[staff['id']][d]
-        elif str(d) in staff['requests']:
-            val = staff['requests'][str(d)]
-        
-        row.append(val if val else "")
-    data.append(row)
+            row.append(val if val else "")
+        data.append(row)
+    
+    df = pd.DataFrame(data, columns=["氏名"] + headers)
+    st.dataframe(df, use_container_width=True)
 
-df = pd.DataFrame(data, columns=["氏名"] + headers)
-
-# Highlighting requests can be done via pandas styling or just trusting the view
-# Streamlit dataframe display
-st.dataframe(df)
-
-
-# 3. Help Needed Row (Only if Generated)
-if st.session_state.generated_schedule:
+    # Help Needed Row
     st.caption("不足人員")
     help_row = []
     
-    # Re-calculate help row dynamically
-    has_shortage = False
     for d in days:
         cnt_day = 0
         cnt_night = 0
@@ -601,13 +606,12 @@ if st.session_state.generated_schedule:
         if cnt_day < DEFAULT_HEADCOUNT[SHIFT_DAY]: alerts.append("日")
         if cnt_night < DEFAULT_HEADCOUNT[SHIFT_NIGHT]: alerts.append("夜")
         
-        if alerts: has_shortage = True
         help_row.append("/".join(alerts) if alerts else "")
 
     df_help = pd.DataFrame([help_row], columns=headers, index=["不足"])
-    st.dataframe(df_help)
+    st.dataframe(df_help, use_container_width=True)
 
-    # 4. CSV Download
+    # CSV Download
     csv = df.to_csv(index=False).encode('utf-8-sig')
     st.download_button(
         "CSVダウンロード",
@@ -617,4 +621,3 @@ if st.session_state.generated_schedule:
         key='download-csv',
         type="primary"
     )
-
