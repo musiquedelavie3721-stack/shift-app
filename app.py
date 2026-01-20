@@ -443,6 +443,19 @@ class ScheduleGenerator:
 
 st.set_page_config(page_title="勤務表自動作成", layout="wide")
 
+# Hide selectbox column icons in data_editor
+st.markdown("""
+<style>
+    /* Hide the selectbox icon in data_editor column headers */
+    [data-testid="stDataFrameResizable"] th svg {
+        display: none !important;
+    }
+    [data-testid="column-header-icon"] {
+        display: none !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 st.title("勤務表自動作成")
 
 # Init Session State
