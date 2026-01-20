@@ -468,6 +468,10 @@ with st.sidebar:
     col_y, col_m = st.columns(2)
     year = col_y.number_input("年", value=2026, step=1)
     month = col_m.selectbox("月", range(1, 13), index=1) # Default Feb
+    
+    # Update days based on sidebar input
+    days_in_month = calendar.monthrange(year, month)[1]
+    days = list(range(1, days_in_month + 1))
 
     st.header("スタッフ管理")
     
@@ -513,56 +517,78 @@ with st.sidebar:
                 st.success("作成完了！")
             else:
                 st.error("作成失敗：条件を満たすシフトが見つかりませんでした。")
-
-# Main Area
-if st.session_state.generated_schedule:
-    days_in_month = calendar.monthrange(year, month)[1]
-    days = list(range(1, days_in_month + 1))
     
-    # 1. Request Input
-    st.subheader("希望シフト入力")
+    if st.session_state.generated_schedule:
+        if st.button("リセット"):
+            st.session_state.generated_schedule = None
+            st.rerun()
+
+# --- Main Area ---
+
+# 1. Request Input Area (Always Visible)
+st.subheader("希望休・シフト入力")
+st.caption("作成前に希望日や固定シフトを入力してください。")
+
+col_input_1, col_input_2 = st.columns([1, 2])
+
+with col_input_1:
     staff_names = [s['name'] for s in st.session_state.staff_list]
     selected_staff_name = st.selectbox("スタッフ選択", staff_names)
     selected_staff = next(s for s in st.session_state.staff_list if s['name'] == selected_staff_name)
-    
-    col_req_day, col_req_shift, col_req_act = st.columns([1, 2, 1])
+
+    col_req_day, col_req_shift = st.columns(2)
     req_day = col_req_day.selectbox("日", days)
     req_shift = col_req_shift.selectbox("シフト", ["(削除)", SHIFT_OFF, SHIFT_PAID, SHIFT_EARLY, SHIFT_DAY, SHIFT_LATE, SHIFT_NIGHT])
     
-    if col_req_act.button("希望を保存"):
+    if st.button("希望を保存"):
         if req_shift == "(削除)":
             if str(req_day) in selected_staff['requests']:
                 del selected_staff['requests'][str(req_day)]
         else:
             selected_staff['requests'][str(req_day)] = req_shift
         
-        # Reset schedule if changed
-        st.session_state.generated_schedule = None
-        st.info("希望を変更したため、再生成してください。")
+        # If schedule existed, warn/reset
+        if st.session_state.generated_schedule:
+            st.warning("希望が変更されました。再生成してください。")
+            st.session_state.generated_schedule = None
+            
         st.rerun()
 
-    # 2. Display Schedule
-    st.subheader("勤務表")
-    
-    # Build DataFrame
-    data = []
-    headers = [str(d) for d in days]
-    
-    for staff in st.session_state.staff_list:
-        row = [staff['name']]
-        for d in days:
-            # Check if requested
-            val = st.session_state.generated_schedule[staff['id']][d]
-            # Use request checks if needed to mark visually (Pandas styling is limited)
-            row.append(val)
-        data.append(row)
-    
-    df = pd.DataFrame(data, columns=["氏名"] + headers)
-    st.dataframe(df)
+# 2. Schedule Display (Requests or Generated)
+st.divider()
+st.subheader("勤務表プレビュー")
 
-    # 3. Help Needed
-    st.subheader("不足/ヘルプ")
+# Build DataFrame
+data = []
+headers = [str(d) for d in days]
+
+for staff in st.session_state.staff_list:
+    row = [staff['name']]
+    for d in days:
+        val = ""
+        # Priority: Generated Schedule > Requests
+        if st.session_state.generated_schedule:
+            val = st.session_state.generated_schedule[staff['id']][d]
+        elif str(d) in staff['requests']:
+            val = staff['requests'][str(d)]
+        
+        row.append(val if val else "")
+    data.append(row)
+
+df = pd.DataFrame(data, columns=["氏名"] + headers)
+
+# Highlighting requests can be done via pandas styling or just trusting the view
+# Streamlit dataframe display
+st.dataframe(df, height=400 if len(data) > 10 else None)
+
+
+# 3. Help Needed Row (Only if Generated)
+if st.session_state.generated_schedule:
+    st.caption("不足人員")
     help_row = []
+    
+    # Re-calculate help row dynamically
+    has_shortage = False
     for d in days:
         cnt_day = 0
         cnt_night = 0
@@ -575,6 +601,7 @@ if st.session_state.generated_schedule:
         if cnt_day < DEFAULT_HEADCOUNT[SHIFT_DAY]: alerts.append("日")
         if cnt_night < DEFAULT_HEADCOUNT[SHIFT_NIGHT]: alerts.append("夜")
         
+        if alerts: has_shortage = True
         help_row.append("/".join(alerts) if alerts else "")
 
     df_help = pd.DataFrame([help_row], columns=headers, index=["不足"])
@@ -587,8 +614,7 @@ if st.session_state.generated_schedule:
         csv,
         f"schedule_{year}_{month}.csv",
         "text/csv",
-        key='download-csv'
+        key='download-csv',
+        type="primary"
     )
 
-elif not st.session_state.generated_schedule:
-    st.info("左のサイドバーから「勤務表を作成」ボタンを押してください。")
