@@ -579,7 +579,7 @@ df = pd.DataFrame(data, columns=["氏名"] + headers)
 
 # Highlighting requests can be done via pandas styling or just trusting the view
 # Streamlit dataframe display
-st.dataframe(df, height=400 if len(data) > 10 else None)
+st.dataframe(df)
 
 
 # 3. Help Needed Row (Only if Generated)
