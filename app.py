@@ -545,29 +545,31 @@ st.caption("セルをクリックしてシフトを選択してください。�
 if st.session_state.generated_schedule is None:
     # Show editable request table
     data = {}
-    data["氏名"] = [s['name'] for s in st.session_state.staff_list]
     
+    # Pre-populate data with sanitized values
     for d in days:
         col_data = []
         for staff in st.session_state.staff_list:
             val = staff['requests'].get(str(d), "")
-            col_data.append(val if val else "")
+            # Strict sanitization
+            if val is None or str(val) == "None":
+                val = ""
+            col_data.append(val)
         data[str(d)] = col_data
     
-    df_edit = pd.DataFrame(data)
-    # Fill NaN/None with empty string
-    df_edit = df_edit.fillna("")
+    # Create DF with "氏名" as index
+    staff_names = [s['name'] for s in st.session_state.staff_list]
+    df_edit = pd.DataFrame(data, index=staff_names)
     
-    # Column config for dropdown - use TextColumn with options workaround
-    # Options list: empty string first for "blank" display
+    # Column config for dropdown
     shift_options = ["", SHIFT_OFF, SHIFT_PAID, SHIFT_EARLY, SHIFT_DAY, SHIFT_LATE, SHIFT_NIGHT]
     
     column_config = {
-        "氏名": st.column_config.TextColumn("氏名", disabled=True, width="small")
+        "_index": st.column_config.Column("氏名", disabled=True, width="small")
     }
     for d in days:
         column_config[str(d)] = st.column_config.SelectboxColumn(
-            str(d),  # Just the number as label
+            str(d),
             options=shift_options,
             default="",
             required=False,
@@ -577,21 +579,19 @@ if st.session_state.generated_schedule is None:
     edited_df = st.data_editor(
         df_edit,
         column_config=column_config,
-        hide_index=True,
         use_container_width=True,
         key="request_editor",
         num_rows="fixed"
     )
     
-    # Fill NaN in result
-    edited_df = edited_df.fillna("")
-    
     # Sync edits back to session state
-    for i, staff in enumerate(st.session_state.staff_list):
+    for i, name in enumerate(staff_names):
+        # Find staff by name (index) - assuming unique names or using index mapping
+        staff = st.session_state.staff_list[i]
         new_requests = {}
         for d in days:
             val = edited_df.iloc[i][str(d)]
-            if val and val != "" and str(val) != "None":
+            if val is not None and str(val) != "" and str(val) != "None":
                 new_requests[str(d)] = val
         staff['requests'] = new_requests
 
