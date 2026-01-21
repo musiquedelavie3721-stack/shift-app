@@ -443,7 +443,7 @@ class ScheduleGenerator:
 
 st.set_page_config(page_title="勤務表自動作成", layout="wide")
 
-# Hide selectbox column icons in data_editor
+# Custom CSS for styling
 st.markdown("""
 <style>
     /* Hide the selectbox icon in data_editor column headers */
@@ -453,10 +453,17 @@ st.markdown("""
     [data-testid="column-header-icon"] {
         display: none !important;
     }
+    /* Minimize top padding */
+    .block-container {
+        padding-top: 2rem;
+    }
+    /* Sidebar styling adjustments */
+    [data-testid="stSidebar"] .stButton button {
+        width: 100%;
+        text-align: left;
+    }
 </style>
 """, unsafe_allow_html=True)
-
-st.title("勤務表自動作成")
 
 # Init Session State
 if 'staff_list' not in st.session_state:
@@ -477,10 +484,12 @@ if 'generated_schedule' not in st.session_state:
 
 # Sidebar
 with st.sidebar:
+    st.title("勤務表自動作成")
+    
     st.header("期間設定")
-    col_y, col_m = st.columns(2)
-    year = col_y.number_input("年", value=2026, step=1)
-    month = col_m.selectbox("月", range(1, 13), index=1) # Default Feb
+    col_y, col_m = st.columns([1, 1])
+    year = col_y.number_input("年", value=2026, step=1, label_visibility="collapsed")
+    month = col_m.selectbox("月", range(1, 13), index=1, label_visibility="collapsed") # Default Feb
     
     # Update days based on sidebar input
     days_in_month = calendar.monthrange(year, month)[1]
@@ -488,23 +497,25 @@ with st.sidebar:
 
     st.header("スタッフ管理")
     
-    # Staff List
+    # Staff List - Compact View
     for i, staff in enumerate(st.session_state.staff_list):
-        with st.expander(f"{staff['name']}"):
-            # Shift Config
-            allowed = st.multiselect(
-                "可能シフト", 
-                ALL_SHIFTS, 
-                default=staff['allowed_shifts'],
-                key=f"allow_{staff['id']}"
-            )
-            staff['allowed_shifts'] = allowed
-
-            if st.button("削除", key=f"del_{staff['id']}"):
+        c1, c2 = st.columns([3, 1])
+        with c1:
+            with st.expander(f"{staff['name']}", expanded=False):
+                # Shift Config
+                allowed = st.multiselect(
+                    "可能シフト", 
+                    ALL_SHIFTS, 
+                    default=staff['allowed_shifts'],
+                    key=f"allow_{staff['id']}"
+                )
+                staff['allowed_shifts'] = allowed
+        with c2:
+             if st.button("✕", key=f"del_{staff['id']}", help="削除"):
                 st.session_state.staff_list.pop(i)
                 st.rerun()
 
-    new_name = st.text_input("新規スタッフ名")
+    new_name = st.text_input("新規スタッフ名", placeholder="名前を入力")
     if st.button("スタッフ追加"):
         if new_name:
             st.session_state.staff_list.append({
@@ -515,6 +526,7 @@ with st.sidebar:
             })
             st.rerun()
 
+    st.markdown("---")
     st.header("アクション")
     if st.button("勤務表を作成", type="primary"):
         config = {
