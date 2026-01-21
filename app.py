@@ -479,6 +479,15 @@ if 'staff_list' not in st.session_state:
         {'id': 9, 'name': "秋本", 'allowed_shifts': ALL_SHIFTS, 'requests': {}}
     ]
 
+# Force strict sanitization of session state on every rerun
+# This fixes the issue where "None" string persists in the data
+for staff in st.session_state.staff_list:
+    if 'requests' in staff:
+        for dh in list(staff['requests'].keys()):
+            val = staff['requests'][dh]
+            if val is None or str(val) == "None":
+                del staff['requests'][dh]
+
 if 'generated_schedule' not in st.session_state:
     st.session_state.generated_schedule = None
 
